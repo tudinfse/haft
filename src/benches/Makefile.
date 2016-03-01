@@ -1,0 +1,12 @@
+MKFILE_PATH := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+
+include $(MKFILE_PATH)/Makefile.common
+
+all::
+	echo "ACTION is not specified ({native ilr tx haft} + their second versions)"
+	echo "  e.g., 'make ACTION=native'  -- original build"
+
+cleanall::
+	rm -f -r obj
+	rm -f -r *.exe
+

@@ -1,0 +1,250 @@
+target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
+
+; ================================================================== intrinsics
+declare i64 @llvm.x86.movswift.i64(i64)
+declare i32 @llvm.x86.movswift.i32(i32)
+declare i16 @llvm.x86.movswift.i16(i16)
+declare i8  @llvm.x86.movswift.i8(i8)
+declare double @llvm.x86.fmovswift.f64(double)
+declare float  @llvm.x86.fmovswift.f32(float)
+declare <2 x i64> @llvm.x86.dqmovswift(<2 x i64>)
+declare <2 x double> @llvm.x86.pdmovswift(<2 x double>)
+declare <4 x float> @llvm.x86.psmovswift(<4 x float>)
+
+; ===================================================================== helpers
+; Function Attrs: noreturn nounwind
+declare void @exit(i32) #1
+
+; Function Attrs: alwaysinline nounwind uwtable
+define void @"SWIFT$detected"() #0 {
+entry:
+  tail call void @exit(i32 2) #2
+  unreachable
+}
+
+; ====================================================================== movers
+; Function Attrs: alwaysinline nounwind uwtable
+define i8 @"SWIFT$move_i8"(i8 %v) #0 {
+entry:
+  %v.swift = call i8 @llvm.x86.movswift.i8(i8 %v)
+  ret i8 %v.swift
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define i16 @"SWIFT$move_i16"(i16 %v) #0 {
+entry:
+  %v.swift = call i16 @llvm.x86.movswift.i16(i16 %v)
+  ret i16 %v.swift
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define i32 @"SWIFT$move_i32"(i32 %v) #0 {
+entry:
+  %v.swift = call i32 @llvm.x86.movswift.i32(i32 %v)
+  ret i32 %v.swift
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define i64 @"SWIFT$move_i64"(i64 %v) #0 {
+entry:
+  %v.swift = call i64 @llvm.x86.movswift.i64(i64 %v)
+  ret i64 %v.swift
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define i8* @"SWIFT$move_ptr"(i8* %v) #0 {
+entry:
+  %iv  = ptrtoint i8* %v to i64
+  %mv  = call i64 @llvm.x86.movswift.i64(i64 %iv)
+  %v.swift = inttoptr i64 %mv to i8*
+  ret i8* %v.swift
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define float @"SWIFT$move_float"(float %v) #0 {
+entry:
+  %v.swift = call float @llvm.x86.fmovswift.f32(float %v)
+  ret float %v.swift
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define double @"SWIFT$move_double"(double %v) #0 {
+entry:
+  %v.swift = call double @llvm.x86.fmovswift.f64(double %v)
+  ret double %v.swift
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define <2 x i64> @"SWIFT$move_dq"(<2 x i64> %v) #0 {
+entry:
+  %v.swift = call <2 x i64> @llvm.x86.dqmovswift(<2 x i64> %v)
+  ret <2 x i64> %v.swift
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define <2 x double> @"SWIFT$move_pd"(<2 x double> %v) #0 {
+entry:
+  %v.swift = call <2 x double> @llvm.x86.pdmovswift(<2 x double> %v)
+  ret <2 x double> %v.swift
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define <4 x float> @"SWIFT$move_ps"(<4 x float> %v) #0 {
+entry:
+  %v.swift = call <4 x float> @llvm.x86.psmovswift(<4 x float> %v)
+  ret <4 x float> %v.swift
+}
+
+; ==================================================================== checkers
+; Function Attrs: alwaysinline nounwind uwtable
+define void @"SWIFT$check_i8"(i8 %v1, i8 %v2, i32 %id) #0 {
+entry:
+  %cmp = icmp eq i8 %v1, %v2
+  br i1 %cmp, label %if.end, label %if.then
+
+if.then:                                          ; preds = %entry
+  tail call void @exit(i32 2) #2
+  unreachable
+
+if.end:                                           ; preds = %entry
+  ret void
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define void @"SWIFT$check_i16"(i16 %v1, i16 %v2, i32 %id) #0 {
+entry:
+  %cmp = icmp eq i16 %v1, %v2
+  br i1 %cmp, label %if.end, label %if.then
+
+if.then:                                          ; preds = %entry
+  tail call void @exit(i32 2) #2
+  unreachable
+
+if.end:                                           ; preds = %entry
+  ret void
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define void @"SWIFT$check_i32"(i32 %v1, i32 %v2, i32 %id) #0 {
+entry:
+  %cmp = icmp eq i32 %v1, %v2
+  br i1 %cmp, label %if.end, label %if.then
+
+if.then:                                          ; preds = %entry
+  tail call void @exit(i32 2) #2
+  unreachable
+
+if.end:                                           ; preds = %entry
+  ret void
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define void @"SWIFT$check_i64"(i64 %v1, i64 %v2, i32 %id) #0 {
+entry:
+  %cmp = icmp eq i64 %v1, %v2
+  br i1 %cmp, label %if.end, label %if.then
+
+if.then:                                          ; preds = %entry
+  tail call void @exit(i32 2) #2
+  unreachable
+
+if.end:                                           ; preds = %entry
+  ret void
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define void @"SWIFT$check_ptr"(i8* readnone %v1, i8* readnone %v2, i32 %id) #0 {
+entry:
+  %cmp = icmp eq i8* %v1, %v2
+  br i1 %cmp, label %if.end, label %if.then
+
+if.then:                                          ; preds = %entry
+  tail call void @exit(i32 2) #2
+  unreachable
+
+if.end:                                           ; preds = %entry
+  ret void
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define void @"SWIFT$check_double"(double %v1, double %v2, i32 %id) #0 {
+entry:
+  %cmp = fcmp ueq double %v1, %v2
+  br i1 %cmp, label %if.end, label %if.then
+
+if.then:                                          ; preds = %entry
+  tail call void @exit(i32 2) #2
+  unreachable
+
+if.end:                                           ; preds = %entry
+  ret void
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define void @"SWIFT$check_float"(float %v1, float %v2, i32 %id) #0 {
+entry:
+  %cmp = fcmp ueq float %v1, %v2
+  br i1 %cmp, label %if.end, label %if.then
+
+if.then:                                          ; preds = %entry
+  tail call void @exit(i32 2) #2
+  unreachable
+
+if.end:                                           ; preds = %entry
+  ret void
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define void @"SWIFT$check_dq"(<2 x i64> %v1, <2 x i64> %v2, i32 %id) #0 {
+entry:
+  %bcs1 = bitcast <2 x i64> %v1 to i128
+  %bcs2 = bitcast <2 x i64> %v2 to i128
+  %cmp = icmp eq i128 %bcs1, %bcs2
+  br i1 %cmp, label %if.end, label %if.then
+
+if.then:                                          ; preds = %entry
+  tail call void @exit(i32 2) #2
+  unreachable
+
+if.end:                                           ; preds = %entry
+  ret void
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define void @"SWIFT$check_pd"(<2 x double> %v1, <2 x double> %v2, i32 %id) #0 {
+entry:
+  %bcs1 = bitcast <2 x double> %v1 to i128
+  %bcs2 = bitcast <2 x double> %v2 to i128
+  %cmp = icmp eq i128 %bcs1, %bcs2
+  br i1 %cmp, label %if.end, label %if.then
+
+if.then:                                          ; preds = %entry
+  tail call void @exit(i32 2) #2
+  unreachable
+
+if.end:                                           ; preds = %entry
+  ret void
+}
+
+; Function Attrs: alwaysinline nounwind uwtable
+define void @"SWIFT$check_ps"(<4 x float> %v1, <4 x float> %v2, i32 %id) #0 {
+entry:
+  %bcs1 = bitcast <4 x float> %v1 to i128
+  %bcs2 = bitcast <4 x float> %v2 to i128
+  %cmp = icmp eq i128 %bcs1, %bcs2
+  br i1 %cmp, label %if.end, label %if.then
+
+if.then:                                          ; preds = %entry
+  tail call void @exit(i32 2) #2
+  unreachable
+
+if.end:                                           ; preds = %entry
+  ret void
+}
+
+attributes #0 = { alwaysinline nounwind uwtable "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #1 = { noreturn nounwind "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #2 = { noreturn nounwind }
+
+

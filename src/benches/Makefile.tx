@@ -1,0 +1,41 @@
+MKFILE_PATH := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+
+include $(MKFILE_PATH)/Makefile.common
+
+TX_RUNTIME = $(TX_PATH)/runtime/tx.c
+TX_PASSFILE = $(TX_PATH)/pass/tx_pass.so
+TX_PASSNAME = -tx
+
+CCFLAGS := $(CCFLAGS) $(HTM_FLAGS)
+
+all:: $(NAME).tx.exe
+
+clean::
+	rm -f obj/tx.bc obj/$(NAME).tx-linked.bc obj/$(NAME).tx-renamed.bc obj/$(NAME).tx-noinline.bc obj/$(NAME).tx.bc
+	rm -f $(NAME).tx.exe
+
+# link all sources + utils
+obj/$(NAME).native-linked.bc: $(addprefix obj/, $(LLS)) $(UTILS)
+	$(LLVM_LINK) -o $@ $^
+
+# substitute libc functions + inline
+obj/$(NAME).native-renamed.bc: obj/$(NAME).native-linked.bc
+	$(LLVM_OPT) -load $(RENAME_PASSFILE) $(RENAME_PASSNAME) -inline $^ -o $@
+
+# IR bitcode files
+obj/tx.bc: $(TX_RUNTIME)
+	$(LLVM_CLANG) -emit-llvm $(CCFLAGS) $(TX_RUNTIME_FLAGS) -c $< -o $@
+
+# link all sources-to-process + runtime
+obj/$(NAME).tx-linked.bc: obj/$(NAME).native-renamed.bc obj/tx.bc
+	$(LLVM_LINK) -o $@ $^
+
+# transactify
+obj/$(NAME).tx.bc: obj/$(NAME).tx-linked.bc
+	$(LLVM_OPT) -load $(TX_PASSFILE) $(TX_PASSNAME) $(TX_PASS_FLAGS) $^ -o obj/$(NAME).tx-noinline.bc
+	$(LLVM_OPT) -always-inline obj/$(NAME).tx-noinline.bc -o $@
+
+# executable
+$(NAME).tx.exe: obj/$(NAME).tx.bc $(addprefix obj/, $(LLS2))
+	$(LLVM_CLANGPP) $(CCFLAGS) -o $@ $^ -I $(INCLUDE_DIRS) -L $(LIB_DIRS) $(LIBS)
+

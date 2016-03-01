@@ -1,0 +1,26 @@
+MKFILE_PATH := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+
+include $(MKFILE_PATH)/Makefile.common
+
+all:: $(NAME).native.exe
+
+clean::
+	rm -f obj/$(NAME).native-linked.bc obj/$(NAME).native-renamed.bc
+	rm -f $(NAME).native.exe
+
+# link all sources + utils
+obj/$(NAME).native-linked.bc: $(addprefix obj/, $(LLS)) $(UTILS)
+	$(LLVM_LINK) -o $@ $^
+
+# substitute libc functions + inline
+obj/$(NAME).native-renamed.bc: obj/$(NAME).native-linked.bc
+	$(LLVM_OPT) -load $(RENAME_PASSFILE) $(RENAME_PASSNAME) -inline $^ -o $@
+
+# for uniformity
+obj/$(NAME).native.bc: obj/$(NAME).native-renamed.bc
+	cp $^ $@
+
+# executable
+$(NAME).native.exe: obj/$(NAME).native.bc $(addprefix obj/, $(LLS2))
+	$(LLVM_CLANGPP) $(CCFLAGS) -o $@ $^ -I $(INCLUDE_DIRS) -L $(LIB_DIRS) $(LIBS)
+

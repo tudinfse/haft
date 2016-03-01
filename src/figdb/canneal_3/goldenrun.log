@@ -1,0 +1,10 @@
+PARSEC Benchmark Suite Version 3.0-beta-20150206
+Threadcount: 2
+5 swaps per temperature step
+start temperature: 100
+netlist filename: canneal_3/input/10.nets
+number of temperature steps: 1
+locs created
+locs assigned
+netlist created. 10 elements.
+Final routing is: 112

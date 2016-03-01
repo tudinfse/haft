@@ -1,0 +1,14 @@
+# IntelliJ project files
+.idea
+*.iml
+out
+gen
+
+# Project
+exp/
+src/figdb/
+src/CONTRIBUTORS
+src/LICENSE
+data/
+
+

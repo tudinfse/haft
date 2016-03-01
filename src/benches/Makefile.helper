@@ -1,0 +1,25 @@
+# NOTE: currently used only for utils/libc/ build
+#       this helper simply compiles sources as-is
+
+MKFILE_PATH := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+
+include $(MKFILE_PATH)/Makefile.common
+
+all:: $(NAME).helper.exe
+
+clean::
+	rm -f obj/$(NAME).helper-linked.bc
+	rm -f $(NAME).helper.exe
+
+# link all sources
+obj/$(NAME).helper-linked.bc: $(addprefix obj/, $(LLS))
+	$(LLVM_LINK) -o $@ $^
+
+# for uniformity
+obj/$(NAME).helper.bc: obj/$(NAME).helper-linked.bc
+	cp $^ $@
+
+# executable
+$(NAME).helper.exe: obj/$(NAME).helper.bc $(addprefix obj/, $(LLS2))
+	$(LLVM_CLANGPP) $(CCFLAGS) -o $@ $^ -I $(INCLUDE_DIRS) -L $(LIB_DIRS) $(LIBS)
+

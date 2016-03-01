@@ -1,0 +1,14 @@
+The number of processors is 2
+
+Linear Regression P-Threads: Running...
+Linear Regression P-Threads Results:
+	a    = 49.088229
+	b    = 0.455484
+	xbar = 90.489247
+	ybar = 90.304659
+	r2   = 0.206974
+	SX   = 100986
+	SY   = 100780
+	SXX  = 10709520
+	SYY  = 10676008
+	SXY  = 9835242

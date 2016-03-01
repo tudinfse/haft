@@ -1,0 +1,15 @@
+Dimension = 3
+Number of clusters = 5
+Number of points = 25
+Size of each dimension = 100
+Generating points
+Generating means
+Starting iterative algorithm
+....
+
+Final means:
+   32    26    16 
+   31    24    84 
+   22    80    35 
+   78    51    16 
+   75    72    65 

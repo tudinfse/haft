@@ -1,0 +1,51 @@
+MKFILE_PATH := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+
+include $(MKFILE_PATH)/Makefile.common
+
+TX_RUNTIME = $(TX_PATH)/runtime/tx.c
+TX_PASSFILE = $(TX_PATH)/pass/tx_pass.so
+TX_PASSNAME = -tx
+
+ILR_RUNTIME = $(ILR_PATH)/runtime/ilr.ll.checks-exit
+ILR_PASSFILE = $(ILR_PATH)/pass/ilr_pass.so
+ILR_PASSNAME = -ilr
+
+all:: $(NAME).haft.exe
+
+clean::
+	rm -f obj/tx.bc obj/$(NAME).haft-linked.bc obj/$(NAME).haft-noinline.bc obj/$(NAME).haft.bc
+	rm -f $(NAME).haft.exe
+
+# link all sources + utils
+obj/$(NAME).native-linked.bc: $(addprefix obj/, $(LLS)) $(UTILS)
+	$(LLVM_LINK) -o $@ $^
+
+# substitute libc functions + inline
+obj/$(NAME).native-renamed.bc: obj/$(NAME).native-linked.bc
+	$(LLVM_OPT) -load $(RENAME_PASSFILE) $(RENAME_PASSNAME) -inline $^ -o $@
+
+# compile tx runtime
+obj/tx.bc: $(TX_RUNTIME)
+	$(LLVM_CLANG) -emit-llvm $(CCFLAGS) $(TX_RUNTIME_FLAGS) -c $< -o $@
+
+# link all sources-to-process + ilr runtime
+obj/$(NAME).ilr-linked.bc: obj/$(NAME).native-renamed.bc $(ILR_RUNTIME)
+	$(LLVM_LINK) -o $@ $^
+
+# instruction-level replication
+obj/$(NAME).ilr-noinline.bc: obj/$(NAME).ilr-linked.bc
+	$(LLVM_OPT) -load $(ILR_PASSFILE) $(ILR_PASSNAME) $^ -o $@
+
+# link ilr + tx runtime
+obj/$(NAME).haft-linked.bc: obj/$(NAME).ilr-noinline.bc obj/tx.bc
+	$(LLVM_LINK) -o $@ $^
+
+# transactify (make haft)
+obj/$(NAME).haft.bc: obj/$(NAME).haft-linked.bc
+	$(LLVM_OPT) -load $(TX_PASSFILE) $(TX_PASSNAME) $(TX_PASS_FLAGS) $^ -o obj/$(NAME).haft-noinline.bc
+	$(LLVM_OPT) -always-inline obj/$(NAME).haft-noinline.bc -o $@
+
+# executable
+$(NAME).haft.exe: obj/$(NAME).haft.bc $(addprefix obj/, $(LLS2))
+	$(LLVM_CLANGPP) $(CCFLAGS) -o $@ $^ -I $(INCLUDE_DIRS) -L $(LIB_DIRS) $(LIBS)
+

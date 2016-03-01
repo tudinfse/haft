@@ -1,0 +1,60 @@
+MKFILE_PATH := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+
+include $(MKFILE_PATH)/../Makefile.local
+
+# =============================== LLVM EXE =================================== #
+LLVM_CLANG = $(LLVM_PATH)/clang
+LLVM_CLANGPP = $(LLVM_PATH)/clang++
+LLVM_LLC = $(LLVM_PATH)/llc
+LLVM_OPT = $(LLVM_PATH)/opt
+LLVM_DIS = $(LLVM_PATH)/llvm-dis
+LLVM_LINK = $(LLVM_PATH)/llvm-link
+
+
+# ============================ UTIL LLVM PASSES ============================== #
+UTILS= $(MKFILE_PATH)/util/libc/obj/libc-util.helper-linked.bc
+RENAME_PASSFILE = $(MKFILE_PATH)/util/renamer/renamer_pass.so
+RENAME_PASSNAME = -rename
+
+# ================================ CCFLAGS =================================== #
+# compilation/linkage flags 
+CCFLAGS := -O3 -msse4.2 $(CCFLAGS)
+# flags for Hardware Transactional Memory used
+CCFLAGS := $(CCFLAGS) $(HTM_FLAGS)
+# we need to disable usage of llvm.mem* intrinsics, otherwise have recursion
+CCFLAGS := $(CCFLAGS) -fno-builtin
+# no ctype macros like toupper();  this is important for libc substitutes
+CCFLAGS := $(CCFLAGS) -D__NO_CTYPE=1
+
+# ================================ TARGETS =================================== #
+# LLVM IR bitcode compiled from SRC -- sources to be linked together and
+# processed by custom LLVM passes
+LLS = $(addsuffix .bc, $(SRC))
+
+# LLVM IR bitcode compiled from SRC2 -- source to be linked in the final
+# executable, i.e., they are not processed by custom passes
+LLS2= $(addsuffix .bc, $(SRC2))
+
+.PHONY: all clean make_dirs
+
+all:: make_dirs
+
+make_dirs:
+	mkdir -p obj
+
+# IR bitcode files
+obj/%.bc: src/%.c
+	$(LLVM_CLANG) -emit-llvm $(CCFLAGS) -c $< -o $@
+
+obj/%.bc: src/%.C
+	$(LLVM_CLANG) -emit-llvm $(CCFLAGS) -c $< -o $@
+
+obj/%.bc: src/%.cpp
+	$(LLVM_CLANGPP) -emit-llvm $(CCFLAGS) $(CXXFLAGS) -c $< -o $@
+
+obj/%.bc: src/%.cxx
+	$(LLVM_CLANGPP) -emit-llvm $(CCFLAGS) $(CXXFLAGS) -c $< -o $@
+
+obj/%.bc: src/%.cc
+	$(LLVM_CLANGPP) -emit-llvm $(CCFLAGS) $(CXXFLAGS) -c $< -o $@
+

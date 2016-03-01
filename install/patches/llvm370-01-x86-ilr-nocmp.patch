@@ -1,0 +1,664 @@
+diff --git a/include/llvm/IR/IntrinsicsX86.td b/include/llvm/IR/IntrinsicsX86.td
+index 86cf68a..65c2143 100644
+--- a/include/llvm/IR/IntrinsicsX86.td
++++ b/include/llvm/IR/IntrinsicsX86.td
+@@ -4101,3 +4101,88 @@ let TargetPrefix = "x86" in {
+   def int_x86_sha256msg2 : GCCBuiltin<"__builtin_ia32_sha256msg2">,
+       Intrinsic<[llvm_v4i32_ty], [llvm_v4i32_ty, llvm_v4i32_ty], [IntrNoMem]>;
+ }
++
++//===----------------------------------------------------------------------===//
++// Swift hardening intrinsics
++
++// moves + cmp
++let TargetPrefix = "x86" in {
++  def int_x86_movswift : Intrinsic<[llvm_anyint_ty], [LLVMMatchType<0>],
++                                   [IntrNoMem]>;
++  def int_x86_cmpswift : Intrinsic<[llvm_i1_ty], [llvm_anyint_ty, LLVMMatchType<0>],
++                                   [IntrNoMem]>;
++}
++
++let TargetPrefix = "x86" in {
++  def int_x86_fmovswift : Intrinsic<[llvm_anyfloat_ty], [LLVMMatchType<0>],
++                                    [IntrNoMem]>;
++}
++
++let TargetPrefix = "x86" in {
++  // double quadword integers
++  def int_x86_dqmovswift : Intrinsic<[llvm_v2i64_ty], [llvm_v2i64_ty],
++                                     [IntrNoMem]>;
++  // packed doubles
++  def int_x86_pdmovswift : Intrinsic<[llvm_v2f64_ty], [llvm_v2f64_ty],
++                                     [IntrNoMem]>;
++  // packed singles (floats)
++  def int_x86_psmovswift : Intrinsic<[llvm_v4f32_ty], [llvm_v4f32_ty],
++                                     [IntrNoMem]>;
++}
++
++// subs
++let TargetPrefix = "x86" in {
++  def int_x86_subswift : Intrinsic<[llvm_anyint_ty],
++                                   [LLVMMatchType<0>, LLVMMatchType<0>],
++                                   [IntrNoMem]>;
++}
++
++let TargetPrefix = "x86" in {
++  def int_x86_fsubswift : Intrinsic<[llvm_anyfloat_ty],
++                                    [LLVMMatchType<0>, LLVMMatchType<0>],
++                                    [IntrNoMem]>;
++}
++
++let TargetPrefix = "x86" in {
++  // double quadword integers
++  def int_x86_dqsubswift : Intrinsic<[llvm_v2i64_ty],
++                                     [llvm_v2i64_ty, llvm_v2i64_ty],
++                                     [IntrNoMem]>;
++  // packed doubles
++  def int_x86_pdsubswift : Intrinsic<[llvm_v2f64_ty],
++                                     [llvm_v2f64_ty, llvm_v2f64_ty],
++                                     [IntrNoMem]>;
++  // packed singles (floats)
++  def int_x86_pssubswift : Intrinsic<[llvm_v4f32_ty],
++                                     [llvm_v4f32_ty, llvm_v4f32_ty],
++                                     [IntrNoMem]>;
++}
++
++// nops
++let TargetPrefix = "x86" in {
++  def int_x86_nopsubswift : Intrinsic<[llvm_anyint_ty],
++                                      [LLVMMatchType<0>, LLVMMatchType<0>],
++                                      [IntrNoMem]>;
++}
++
++let TargetPrefix = "x86" in {
++  def int_x86_fnopsubswift : Intrinsic<[llvm_anyfloat_ty],
++                                       [LLVMMatchType<0>, LLVMMatchType<0>],
++                                       [IntrNoMem]>;
++}
++
++let TargetPrefix = "x86" in {
++  // double quadword integers
++  def int_x86_dqnopsubswift : Intrinsic<[llvm_v2i64_ty],
++                                        [llvm_v2i64_ty, llvm_v2i64_ty],
++                                        [IntrNoMem]>;
++  // packed doubles
++  def int_x86_pdnopsubswift : Intrinsic<[llvm_v2f64_ty],
++                                        [llvm_v2f64_ty, llvm_v2f64_ty],
++                                        [IntrNoMem]>;
++  // packed singles (floats)
++  def int_x86_psnopsubswift : Intrinsic<[llvm_v4f32_ty],
++                                        [llvm_v4f32_ty, llvm_v4f32_ty],
++                                        [IntrNoMem]>;
++}
++
+diff --git a/lib/Target/X86/CMakeLists.txt b/lib/Target/X86/CMakeLists.txt
+index be61b47..97f1eb3 100644
+--- a/lib/Target/X86/CMakeLists.txt
++++ b/lib/Target/X86/CMakeLists.txt
+@@ -32,6 +32,7 @@ set(sources
+   X86TargetTransformInfo.cpp
+   X86VZeroUpper.cpp
+   X86FixupLEAs.cpp
++  X86ReplaceSwift.cpp
+   )
+ 
+ if( CMAKE_CL_64 )
+diff --git a/lib/Target/X86/X86.h b/lib/Target/X86/X86.h
+index 8b0a4cf..73e1d11 100644
+--- a/lib/Target/X86/X86.h
++++ b/lib/Target/X86/X86.h
+@@ -69,6 +69,8 @@ FunctionPass *createX86FixupLEAs();
+ /// esp-relative movs with pushes.
+ FunctionPass *createX86CallFrameOptimization();
+ 
++FunctionPass *createX86ReplaceSwift();
++
+ } // End llvm namespace
+ 
+ #endif
+diff --git a/lib/Target/X86/X86ISelLowering.cpp b/lib/Target/X86/X86ISelLowering.cpp
+index 98a19ee..60e0564 100644
+--- a/lib/Target/X86/X86ISelLowering.cpp
++++ b/lib/Target/X86/X86ISelLowering.cpp
+@@ -17697,6 +17718,7 @@ const char *X86TargetLowering::getTargetNodeName(unsigned Opcode) const {
+   case X86ISD::RDTSCP_DAG:         return "X86ISD::RDTSCP_DAG";
+   case X86ISD::RDPMC_DAG:          return "X86ISD::RDPMC_DAG";
+   case X86ISD::BT:                 return "X86ISD::BT";
++  case X86ISD::SWIFTCMP:           return "X86ISD::SWIFTCMP";
+   case X86ISD::CMP:                return "X86ISD::CMP";
+   case X86ISD::COMI:               return "X86ISD::COMI";
+   case X86ISD::UCOMI:              return "X86ISD::UCOMI";
+diff --git a/lib/Target/X86/X86ISelLowering.h b/lib/Target/X86/X86ISelLowering.h
+index 5130c37..e4cf905 100644
+--- a/lib/Target/X86/X86ISelLowering.h
++++ b/lib/Target/X86/X86ISelLowering.h
+@@ -91,6 +91,8 @@ namespace llvm {
+       /// X86 compare and logical compare instructions.
+       CMP, COMI, UCOMI,
+ 
++      SWIFTCMP,
++
+       /// X86 bit-test instructions.
+       BT,
+ 
+diff --git a/lib/Target/X86/X86InstrInfo.td b/lib/Target/X86/X86InstrInfo.td
+index 70c2027..d029ee3 100644
+--- a/lib/Target/X86/X86InstrInfo.td
++++ b/lib/Target/X86/X86InstrInfo.td
+@@ -132,6 +132,8 @@ def X86shrd    : SDNode<"X86ISD::SHRD",     SDTIntShiftDOp>;
+ def X86cmp     : SDNode<"X86ISD::CMP" ,     SDTX86CmpTest>;
+ def X86bt      : SDNode<"X86ISD::BT",       SDTX86CmpTest>;
+ 
++def X86swiftcmp : SDNode<"X86ISD::SWIFTCMP", SDTX86CmpTest>;
++
+ def X86cmov    : SDNode<"X86ISD::CMOV",     SDTX86Cmov>;
+ def X86brcond  : SDNode<"X86ISD::BRCOND",   SDTX86BrCond,
+                         [SDNPHasChain]>;
+@@ -2468,6 +2470,8 @@ include "X86InstrSystem.td"
+ // Compiler Pseudo Instructions and Pat Patterns
+ include "X86InstrCompiler.td"
+ 
++include "X86InstrSwift.td"
++
+ //===----------------------------------------------------------------------===//
+ // Assembler Mnemonic Aliases
+ //===----------------------------------------------------------------------===//
+diff --git a/lib/Target/X86/X86InstrSwift.td b/lib/Target/X86/X86InstrSwift.td
+new file mode 100755
+index 0000000..63d023f
+--- /dev/null
++++ b/lib/Target/X86/X86InstrSwift.td
+@@ -0,0 +1,188 @@
++//===-- X86InstrInfo.td - Main X86 Instruction Definition --*- tablegen -*-===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++
++//===----------------------------------------------------------------------===//
++//  Swift Move Instructions.
++//
++let SchedRW = [WriteMove], isCodeGenOnly = 1 in {
++def SWIFTMOV8rr  : I<0, Pseudo, (outs GR8 :$dst), (ins GR8 :$src),
++                     "swiftmov{b}\t{$src, $dst|$dst, $src}",
++                     [(set GR8:$dst, (int_x86_movswift GR8:$src))],
++                     IIC_MOV>;
++def SWIFTMOV16rr : I<0, Pseudo, (outs GR16:$dst), (ins GR16:$src),
++                     "swiftmov{w}\t{$src, $dst|$dst, $src}",
++                     [(set GR16:$dst, (int_x86_movswift GR16:$src))],
++                     IIC_MOV>, OpSize16;
++def SWIFTMOV32rr : I<0, Pseudo, (outs GR32:$dst), (ins GR32:$src),
++                     "swiftmov{l}\t{$src, $dst|$dst, $src}",
++                     [(set GR32:$dst, (int_x86_movswift GR32:$src))],
++                     IIC_MOV>, OpSize32;
++def SWIFTMOV64rr : RI<0, Pseudo, (outs GR64:$dst), (ins GR64:$src),
++                      "swiftmov{q}\t{$src, $dst|$dst, $src}",
++                      [(set GR64:$dst, (int_x86_movswift GR64:$src))],
++                      IIC_MOV>;
++}
++
++let isCodeGenOnly = 1 in {
++def SWIFTMOVSSrr : SI<0, Pseudo, (outs FR32 :$dst), (ins FR32 :$src),
++                     "fswiftmov{ss}\t{$src, $dst|$dst, $src}",
++                     [(set FR32:$dst, (int_x86_fmovswift FR32:$src))],
++                     IIC_SSE_MOV_S_RR>, Sched<[WriteFShuffle]>;
++def SWIFTMOVSDrr : SI<0, Pseudo, (outs FR64 :$dst), (ins FR64 :$src),
++                     "fswiftmov{sd}\t{$src, $dst|$dst, $src}",
++                     [(set FR64:$dst, (int_x86_fmovswift FR64:$src))],
++                     IIC_SSE_MOV_S_RR>, Sched<[WriteFShuffle]>;
++
++// double quadword integers
++def SWIFTMOVDQrr : PDI<0, Pseudo, (outs VR128 :$dst), (ins VR128 :$src),
++                        "dqswiftmov\t{$src, $dst|$dst, $src}",
++                        [(set VR128:$dst, (int_x86_dqmovswift VR128:$src))],
++                        IIC_SSE_MOVA_P_RR>, Sched<[WriteMove]>;
++// packed doubles
++def SWIFTMOVPDrr : PDI<0, Pseudo, (outs VR128 :$dst), (ins VR128 :$src),
++                        "pdswiftmov\t{$src, $dst|$dst, $src}",
++                        [(set VR128:$dst, (int_x86_pdmovswift VR128:$src))],
++                        IIC_SSE_MOVA_P_RR>, Sched<[WriteFShuffle]>;
++// packed singles (floats)
++def SWIFTMOVPSrr : PSI<0, Pseudo, (outs VR128 :$dst), (ins VR128 :$src),
++                        "psswiftmov\t{$src, $dst|$dst, $src}",
++                        [(set VR128:$dst, (int_x86_psmovswift VR128:$src))],
++                        IIC_SSE_MOVA_P_RR>, Sched<[WriteFShuffle]>;
++}
++
++//===----------------------------------------------------------------------===//
++//  Swift Compare Instructions.
++//
++// - We explicitly state that SwiftSub is not a comparison instruction
++//   to avoid possible optimizations based on isCompare
++let isCompare = 0, Constraints = "$src1 = $dst", Defs = [EFLAGS], SchedRW = [WriteALU], isCodeGenOnly = 1 in {
++
++def SWIFTSUB8rr  : I<0, Pseudo, (outs GR8:$dst), (ins GR8:$src1, GR8:$src2),
++                     "swiftsub{b}\t{$src2, $src1|$src1, $src2}",
++                     [(set GR8:$dst, (int_x86_subswift GR8:$src1, GR8:$src2))],
++                     IIC_BIN_NONMEM>;
++
++def SWIFTSUB16rr : I<0, Pseudo, (outs GR16:$dst), (ins GR16:$src1, GR16:$src2),
++                     "swiftsub{w}\t{$src2, $src1|$src1, $src2}",
++                     [(set GR16:$dst, (int_x86_subswift GR16:$src1, GR16:$src2))],
++                     IIC_BIN_NONMEM>, OpSize16;
++
++def SWIFTSUB32rr : I<0, Pseudo, (outs GR32:$dst), (ins GR32:$src1, GR32:$src2),
++                     "swiftsub{l}\t{$src2, $src1|$src1, $src2}",
++                     [(set GR32:$dst, (int_x86_subswift GR32:$src1, GR32:$src2))],
++                     IIC_BIN_NONMEM>, OpSize32;
++
++def SWIFTSUB64rr : RI<0, Pseudo, (outs GR64:$dst), (ins GR64:$src1, GR64:$src2),
++                      "swiftsub{q}\t{$src2, $src1|$src1, $src2}",
++                      [(set GR64:$dst, (int_x86_subswift GR64:$src1, GR64:$src2))],
++                      IIC_BIN_NONMEM>;
++
++}
++
++let isCompare = 0, Constraints = "$src1 = $dst", isCodeGenOnly = 1 in {
++
++def SWIFTSUBSSrr : SI<0, Pseudo, (outs FR32:$dst), (ins FR32:$src1, FR32:$src2),
++                      "fswiftsub{ss}\t{$src2, $dst|$dst, $src2}",
++                      [(set FR32:$dst, (int_x86_fsubswift FR32:$src1, FR32:$src2))],
++                      IIC_SSE_ALU_F32S_RR>, Sched<[WriteFAdd]>;
++def SWIFTSUBSDrr : SI<0, Pseudo, (outs FR64:$dst), (ins FR64:$src1, FR64:$src2),
++                      "fswiftsub{sd}\t{$src2, $dst|$dst, $src2}",
++                      [(set FR64:$dst, (int_x86_fsubswift FR64:$src1, FR64:$src2))],
++                      IIC_SSE_ALU_F64S_RR>, Sched<[WriteFAdd]>;
++
++// double quadword integers
++def SWIFTSUBDQrr : PDI<0, Pseudo, (outs VR128:$dst), (ins VR128:$src1, VR128:$src2),
++                        "dqswiftsub\t{$src2, $dst|$dst, $src2}",
++                        [(set VR128:$dst, (int_x86_dqsubswift VR128:$src1, VR128:$src2))],
++                        IIC_SSE_HADDSUB_RR>, Sched<[WriteVecALU]>;
++// packed doubles
++def SWIFTSUBPDrr : PDI<0, Pseudo, (outs VR128:$dst), (ins VR128:$src1, VR128:$src2),
++                        "pdswiftsub\t{$src2, $dst|$dst, $src2}",
++                        [(set VR128:$dst, (int_x86_pdsubswift VR128:$src1, VR128:$src2))],
++                        IIC_SSE_ALU_F64P_RR>, Sched<[WriteFAdd]>;
++// packed singles (floats)
++def SWIFTSUBPSrr : PSI<0, Pseudo, (outs VR128:$dst), (ins VR128:$src1, VR128:$src2),
++                        "psswiftsub\t{$src2, $dst|$dst, $src2}",
++                        [(set VR128:$dst, (int_x86_pssubswift VR128:$src1, VR128:$src2))],
++                        IIC_SSE_ALU_F32P_RR>, Sched<[WriteFAdd]>;
++}
++
++
++//===----------------------------------------------------------------------===//
++//  Swift Pseudo-Compare Instructions.
++//  We use it to test NOP substitutions for compares. It does not define EFLAGS.
++//
++// - We explicitly state that SwiftSub is not a comparison instruction
++//   to avoid possible optimizations based on isCompare
++let isCompare = 0, Constraints = "$src1 = $dst", SchedRW = [WriteALU], isCodeGenOnly = 1 in {
++
++def SWIFTNOPSUB8rr  : I<0, Pseudo, (outs GR8:$dst), (ins GR8:$src1, GR8:$src2),
++                     "swiftnopsub{b}\t{$src2, $src1|$src1, $src2}",
++                     [(set GR8:$dst, (int_x86_nopsubswift GR8:$src1, GR8:$src2))],
++                     IIC_BIN_NONMEM>;
++
++def SWIFTNOPSUB16rr : I<0, Pseudo, (outs GR16:$dst), (ins GR16:$src1, GR16:$src2),
++                     "swiftnopsub{w}\t{$src2, $src1|$src1, $src2}",
++                     [(set GR16:$dst, (int_x86_nopsubswift GR16:$src1, GR16:$src2))],
++                     IIC_BIN_NONMEM>, OpSize16;
++
++def SWIFTNOPSUB32rr : I<0, Pseudo, (outs GR32:$dst), (ins GR32:$src1, GR32:$src2),
++                     "swiftnopsub{l}\t{$src2, $src1|$src1, $src2}",
++                     [(set GR32:$dst, (int_x86_nopsubswift GR32:$src1, GR32:$src2))],
++                     IIC_BIN_NONMEM>, OpSize32;
++
++def SWIFTNOPSUB64rr : RI<0, Pseudo, (outs GR64:$dst), (ins GR64:$src1, GR64:$src2),
++                      "swiftnopsub{q}\t{$src2, $src1|$src1, $src2}",
++                      [(set GR64:$dst, (int_x86_nopsubswift GR64:$src1, GR64:$src2))],
++                      IIC_BIN_NONMEM>;
++
++}
++
++let isCompare = 0, Constraints = "$src1 = $dst", isCodeGenOnly = 1 in {
++
++def SWIFTNOPSUBSSrr : SI<0, Pseudo, (outs FR32:$dst), (ins FR32:$src1, FR32:$src2),
++                      "fswiftnopsub{ss}\t{$src2, $dst|$dst, $src2}",
++                      [(set FR32:$dst, (int_x86_fnopsubswift FR32:$src1, FR32:$src2))],
++                      IIC_SSE_ALU_F32S_RR>, Sched<[WriteFAdd]>;
++
++def SWIFTNOPSUBSDrr : SI<0, Pseudo, (outs FR64:$dst), (ins FR64:$src1, FR64:$src2),
++                      "fswiftnopsub{sd}\t{$src2, $dst|$dst, $src2}",
++                      [(set FR64:$dst, (int_x86_fnopsubswift FR64:$src1, FR64:$src2))],
++                      IIC_SSE_ALU_F64S_RR>, Sched<[WriteFAdd]>;
++
++// double quadword integers
++def SWIFTNOPSUBDQrr : PDI<0, Pseudo, (outs VR128:$dst), (ins VR128:$src1, VR128:$src2),
++                        "dqswiftnopsub\t{$src2, $dst|$dst, $src2}",
++                        [(set VR128:$dst, (int_x86_dqnopsubswift VR128:$src1, VR128:$src2))],
++                        IIC_SSE_HADDSUB_RR>, Sched<[WriteVecALU]>;
++// packed doubles
++def SWIFTNOPSUBPDrr : PDI<0, Pseudo, (outs VR128:$dst), (ins VR128:$src1, VR128:$src2),
++                        "pdswiftnopsub\t{$src2, $dst|$dst, $src2}",
++                        [(set VR128:$dst, (int_x86_pdnopsubswift VR128:$src1, VR128:$src2))],
++                        IIC_SSE_ALU_F64P_RR>, Sched<[WriteFAdd]>;
++// packed singles (floats)
++def SWIFTNOPSUBPSrr : PSI<0, Pseudo, (outs VR128:$dst), (ins VR128:$src1, VR128:$src2),
++                        "psswiftnopsub\t{$src2, $dst|$dst, $src2}",
++                        [(set VR128:$dst, (int_x86_psnopsubswift VR128:$src1, VR128:$src2))],
++                        IIC_SSE_ALU_F32P_RR>, Sched<[WriteFAdd]>;
++
++}
++
++class SwiftBinOpRR_F<string mnemonic, X86TypeInfo typeinfo>
++  : BinOpRR<0, mnemonic, typeinfo, (outs),
++            [(set EFLAGS,
++                  (X86swiftcmp typeinfo.RegClass:$src1, typeinfo.RegClass:$src2))],
++            IIC_BIN_NONMEM, MRMDestReg>;
++
++let Defs = [EFLAGS], isCodeGenOnly = 1 in {
++  def SWIFTCMP8rr  : SwiftBinOpRR_F<"swiftcmp{b}", Xi8>;
++  def SWIFTCMP16rr : SwiftBinOpRR_F<"swiftcmp{w}", Xi16>;
++  def SWIFTCMP32rr : SwiftBinOpRR_F<"swiftcmp{l}", Xi32>;
++  def SWIFTCMP64rr : SwiftBinOpRR_F<"swiftcmp{q}", Xi64>;
++}
+diff --git a/lib/Target/X86/X86ReplaceSwift.cpp b/lib/Target/X86/X86ReplaceSwift.cpp
+new file mode 100755
+index 0000000..2200297
+--- /dev/null
++++ b/lib/Target/X86/X86ReplaceSwift.cpp
+@@ -0,0 +1,288 @@
++//===-- X86FixupLEAs.cpp - use or replace LEA instructions -----------===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++//
++// This file defines the pass that finds Swift pseudo-instructions and
++// substitutes them by the real instructions.
++//
++//===----------------------------------------------------------------------===//
++
++#include "X86.h"
++#include "X86InstrInfo.h"
++#include "X86Subtarget.h"
++#include "llvm/CodeGen/LiveVariables.h"
++#include "llvm/CodeGen/MachineFunctionPass.h"
++#include "llvm/CodeGen/MachineInstrBuilder.h"
++#include "llvm/CodeGen/MachineRegisterInfo.h"
++#include "llvm/CodeGen/Passes.h"
++#include "llvm/Support/Debug.h"
++#include "llvm/Support/raw_ostream.h"
++#include "llvm/Target/TargetInstrInfo.h"
++using namespace llvm;
++
++#define DEBUG_TYPE "x86-replace-swift"
++
++
++namespace {
++class ReplaceSwiftPass : public MachineFunctionPass {
++  static char ID;
++
++  const char *getPassName() const override { return "X86 Replacement of SWIFT pseudo-instructions"; }
++
++public:
++  ReplaceSwiftPass();
++
++  bool processInstruction(MachineBasicBlock::iterator &MI, MachineFunction::iterator &MBB,
++                          MachineFunction &MF);
++
++  bool runOnMachineFunction(MachineFunction &MF) override;
++
++private:
++  const TargetMachine *TM;
++  const X86InstrInfo *TII;
++  std::map<unsigned, unsigned> OpSwiftToX86;
++  unsigned regSwiftSub;
++};
++
++char ReplaceSwiftPass::ID = 0;
++}
++
++ReplaceSwiftPass::ReplaceSwiftPass()
++  : MachineFunctionPass(ID) {
++
++  // moves
++  OpSwiftToX86[X86::SWIFTMOV8rr]  = X86::MOV8rr;
++  OpSwiftToX86[X86::SWIFTMOV16rr] = X86::MOV16rr;
++  OpSwiftToX86[X86::SWIFTMOV32rr] = X86::MOV32rr;
++  OpSwiftToX86[X86::SWIFTMOV64rr] = X86::MOV64rr;
++
++  OpSwiftToX86[X86::SWIFTMOVSSrr] = X86::MOVSSrr;
++  OpSwiftToX86[X86::SWIFTMOVSDrr] = X86::MOVSDrr;
++
++  OpSwiftToX86[X86::SWIFTMOVDQrr] = X86::MOVDQArr;
++  OpSwiftToX86[X86::SWIFTMOVPDrr] = X86::MOVAPDrr;
++  OpSwiftToX86[X86::SWIFTMOVPSrr] = X86::MOVAPSrr;
++
++  // subs
++  OpSwiftToX86[X86::SWIFTSUB8rr]  = X86::SUB8rr;
++  OpSwiftToX86[X86::SWIFTSUB16rr] = X86::SUB16rr;
++  OpSwiftToX86[X86::SWIFTSUB32rr] = X86::SUB32rr;
++  OpSwiftToX86[X86::SWIFTSUB64rr] = X86::SUB64rr;
++
++  OpSwiftToX86[X86::SWIFTSUBSSrr] = X86::SUBSSrr;
++  OpSwiftToX86[X86::SWIFTSUBSDrr] = X86::SUBSDrr;
++
++  OpSwiftToX86[X86::SWIFTSUBDQrr] = X86::PSUBBrr;
++  OpSwiftToX86[X86::SWIFTSUBPDrr] = X86::SUBPDrr;
++  OpSwiftToX86[X86::SWIFTSUBPSrr] = X86::SUBPSrr;
++
++  // cmps
++  OpSwiftToX86[X86::SWIFTCMP8rr]  = X86::CMP8rr;
++  OpSwiftToX86[X86::SWIFTCMP16rr] = X86::CMP16rr;
++  OpSwiftToX86[X86::SWIFTCMP32rr] = X86::CMP32rr;
++  OpSwiftToX86[X86::SWIFTCMP64rr] = X86::CMP64rr;
++
++  /* TODO: add SWIFTCMP for SSE! */
++}
++
++bool ReplaceSwiftPass::processInstruction(MachineBasicBlock::iterator &MI,
++                                          MachineFunction::iterator &MBB,
++                                          MachineFunction &MF) {
++/*
++  if (regSwiftSub != X86::NoRegister) {
++	if (MI->isCompare() &&
++		MI->getNumOperands() > 0 &&
++		MI->getOperand(0).isReg() &&
++		MI->getOperand(0).getReg() == regSwiftSub) {
++		// found redundant compare instr (`cmp reg, 0x0`) after swiftsub
++	    MachineInstr *NewMI = BuildMI(MF, MI->getDebugLoc(), TII->get(X86::NOOPL))
++	                .addReg(X86::RAX)
++	                .addImm(1)
++	                .addReg(0)
++	                .addImm(0)
++	                .addReg(0);
++	    MBB->insert(MI, NewMI);
++
++	    MBB->erase(MI);
++	    regSwiftSub = X86::NoRegister;
++	}
++  }
++*/
++  int Opcode = MI->getOpcode();
++  switch (Opcode) {
++  case X86::SWIFTMOV8rr:
++  case X86::SWIFTMOV16rr:
++  case X86::SWIFTMOV32rr:
++  case X86::SWIFTMOV64rr:
++  case X86::SWIFTCMP8rr:
++  case X86::SWIFTCMP16rr:
++  case X86::SWIFTCMP32rr:
++  case X86::SWIFTCMP64rr: 
++  case X86::SWIFTMOVDQrr:
++  case X86::SWIFTMOVPDrr:
++  case X86::SWIFTMOVPSrr: {
++    DEBUG(dbgs() << "Replacing: "; MI->dump());
++    const MachineOperand &Dest = MI->getOperand(0);
++    const MachineOperand &Src = MI->getOperand(1);
++
++    unsigned NewOpcode = OpSwiftToX86[Opcode];
++    MachineInstr *NewMI = BuildMI(MF, MI->getDebugLoc(), TII->get(NewOpcode))
++                .addOperand(Dest)
++                .addOperand(Src);
++    MBB->insert(MI, NewMI);
++    MBB->erase(MI);
++    DEBUG(dbgs() << "New instruction: "; NewMI->dump());
++    return true;
++  }
++
++  case X86::SWIFTMOVSSrr:
++  case X86::SWIFTMOVSDrr: {
++    DEBUG(dbgs() << "Replacing: "; MI->dump());
++    const MachineOperand &Dest = MI->getOperand(0);
++    const MachineOperand &Src = MI->getOperand(1);
++
++    unsigned NewOpcode = OpSwiftToX86[Opcode];
++    MachineInstr *NewMI = BuildMI(MF, MI->getDebugLoc(), TII->get(NewOpcode))
++                .addOperand(Dest)
++                .addOperand(Dest)
++                .addOperand(Src);
++    MBB->insert(MI, NewMI);
++    MBB->erase(MI);
++    DEBUG(dbgs() << "New instruction: "; NewMI->dump());
++    return true;
++  }
++
++  case X86::SWIFTSUB8rr:
++  case X86::SWIFTSUB16rr:
++  case X86::SWIFTSUB32rr:
++  case X86::SWIFTSUB64rr: {
++    DEBUG(dbgs() << "Replacing: "; MI->dump());
++    const MachineOperand &Dest = MI->getOperand(0);
++    const MachineOperand &Src1 = MI->getOperand(1);
++    const MachineOperand &Src2 = MI->getOperand(2);
++    const MachineOperand &Flag = MI->getOperand(3);
++
++    unsigned NewOpcode = OpSwiftToX86[Opcode];
++    MachineInstr *NewMI = BuildMI(MF, MI->getDebugLoc(), TII->get(NewOpcode))
++                .addOperand(Dest)
++                .addOperand(Src1)
++                .addOperand(Src2)
++                .addOperand(Flag);
++    MBB->insert(MI, NewMI);
++
++    assert(Dest.isReg() && "Dest operand in SWIFTSUB is not a register!");
++    regSwiftSub = Dest.getReg();
++    MBB->erase(MI);
++
++    DEBUG(dbgs() << "New instruction: "; NewMI->dump());
++    return true;
++  }
++
++  case X86::SWIFTSUBSSrr:
++  case X86::SWIFTSUBSDrr: 
++  case X86::SWIFTSUBDQrr:
++  case X86::SWIFTSUBPDrr:
++  case X86::SWIFTSUBPSrr: {
++    DEBUG(dbgs() << "Replacing: "; MI->dump());
++    const MachineOperand &Dest = MI->getOperand(0);
++    const MachineOperand &Src1 = MI->getOperand(1);
++    const MachineOperand &Src2 = MI->getOperand(2);
++
++    unsigned NewOpcode = OpSwiftToX86[Opcode];
++    MachineInstr *NewMI = BuildMI(MF, MI->getDebugLoc(), TII->get(NewOpcode))
++                .addOperand(Dest)
++                .addOperand(Src1)
++                .addOperand(Src2);
++    MBB->insert(MI, NewMI);
++    MBB->erase(MI);
++    DEBUG(dbgs() << "New instruction: "; NewMI->dump());
++    return true;
++  }
++
++  case X86::SWIFTNOPSUB8rr:
++  case X86::SWIFTNOPSUB16rr:
++  case X86::SWIFTNOPSUB32rr:
++  case X86::SWIFTNOPSUB64rr: {
++    DEBUG(dbgs() << "Replacing: "; MI->dump());
++
++    // taken from lib/Target/X86/X86MCInstLower.cpp
++    // 3 byte NOOP is `nopl (%rax)`
++    unsigned NewOpcode, BaseReg, ScaleVal, IndexReg, Displacement, SegmentReg;
++    IndexReg = Displacement = SegmentReg = 0;
++    NewOpcode = X86::NOOPL;
++    BaseReg = X86::RAX;
++    ScaleVal = 1;
++
++    MachineInstr *NewMI = BuildMI(MF, MI->getDebugLoc(), TII->get(NewOpcode))
++                .addReg(BaseReg)
++                .addImm(ScaleVal)
++                .addReg(IndexReg)
++                .addImm(Displacement)
++                .addReg(SegmentReg);
++    MBB->insert(MI, NewMI);
++    DEBUG(dbgs() << "New instruction: "; NewMI->dump());
++    MBB->erase(MI);
++    return true;
++  }
++
++  case X86::SWIFTNOPSUBSSrr:
++  case X86::SWIFTNOPSUBSDrr: 
++  case X86::SWIFTNOPSUBDQrr:
++  case X86::SWIFTNOPSUBPDrr:
++  case X86::SWIFTNOPSUBPSrr: {
++    DEBUG(dbgs() << "Replacing: "; MI->dump());
++
++    // 4 byte NOOP is `nopl 0x0(%rax)`
++    unsigned NewOpcode, BaseReg, ScaleVal, IndexReg, Displacement, SegmentReg;
++    IndexReg = SegmentReg = 0;
++    NewOpcode = X86::NOOPL;
++    BaseReg = X86::RAX;
++    ScaleVal = 1;
++    Displacement = 8;
++
++    MachineInstr *NewMI = BuildMI(MF, MI->getDebugLoc(), TII->get(NewOpcode))
++                .addReg(BaseReg)
++                .addImm(ScaleVal)
++                .addReg(IndexReg)
++                .addImm(Displacement)
++                .addReg(SegmentReg);
++    MBB->insert(MI, NewMI);
++    DEBUG(dbgs() << "New instruction: "; NewMI->dump());
++    MBB->erase(MI);
++    return true;
++  }
++  }
++
++  return false;
++}
++
++
++bool ReplaceSwiftPass::runOnMachineFunction(MachineFunction &MF) {
++  TM = &MF.getTarget();
++  TII = static_cast<const X86InstrInfo *>(TM->getMCInstrInfo());
++
++  bool modified = false;
++  regSwiftSub = X86::NoRegister;
++
++  DEBUG(dbgs() << "Start X86ReplaceSwift\n";);
++  for (MachineFunction::iterator BBI = MF.begin(), BBE = MF.end(); BBI != BBE; ++BBI) {
++    MachineBasicBlock::iterator I = BBI->begin(), E = BBI->end();
++    while (I != E) {
++      MachineBasicBlock::iterator N = std::next(I);
++      modified |= processInstruction(I, BBI, MF);
++      I = N;
++    }
++  }
++  DEBUG(dbgs() << "End X86ReplaceSwift\n";);
++
++  return modified;
++}
++
++FunctionPass *llvm::createX86ReplaceSwift() {
++  return new ReplaceSwiftPass();
++}
+diff --git a/lib/Target/X86/X86TargetMachine.cpp b/lib/Target/X86/X86TargetMachine.cpp
+index 919072a..36ca790 100644
+--- a/lib/Target/X86/X86TargetMachine.cpp
++++ b/lib/Target/X86/X86TargetMachine.cpp
+@@ -239,4 +239,6 @@ void X86PassConfig::addPreEmitPass() {
+     addPass(createX86PadShortFunctions());
+     addPass(createX86FixupLEAs());
+   }
++
++  addPass(createX86ReplaceSwift());
+ }

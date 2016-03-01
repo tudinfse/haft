@@ -1,0 +1,35 @@
+MKFILE_PATH := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+
+include $(MKFILE_PATH)/Makefile.common
+
+ILR_RUNTIME = $(ILR_PATH)/runtime/ilr.ll.checks-exit
+ILR_PASSFILE = $(ILR_PATH)/pass/ilr_pass.so
+ILR_PASSNAME = -ilr
+
+all:: $(NAME).ilr.exe
+
+clean::
+	rm -f obj/$(NAME).ilr-linked.bc obj/$(NAME).ilr-noinline.bc obj/$(NAME).ilr.bc
+	rm -f $(NAME).ilr.exe
+
+# link all sources + utils
+obj/$(NAME).native-linked.bc: $(addprefix obj/, $(LLS)) $(UTILS)
+	$(LLVM_LINK) -o $@ $^
+
+# substitute libc functions + inline
+obj/$(NAME).native-renamed.bc: obj/$(NAME).native-linked.bc
+	$(LLVM_OPT) -load $(RENAME_PASSFILE) $(RENAME_PASSNAME) -inline $^ -o $@
+
+# link all sources-to-process + runtime
+obj/$(NAME).ilr-linked.bc: obj/$(NAME).native-renamed.bc $(ILR_RUNTIME)
+	$(LLVM_LINK) -o $@ $^
+
+# instruction-level replication
+obj/$(NAME).ilr.bc: obj/$(NAME).ilr-linked.bc
+	$(LLVM_OPT) -load $(ILR_PASSFILE) $(ILR_PASSNAME) $^ -o obj/$(NAME).ilr-noinline.bc
+	$(LLVM_OPT) -always-inline obj/$(NAME).ilr-noinline.bc -o $@
+
+# executable
+$(NAME).ilr.exe: obj/$(NAME).ilr.bc $(addprefix obj/, $(LLS2))
+	$(LLVM_CLANGPP) $(CCFLAGS) -o $@ $^ -I $(INCLUDE_DIRS) -L $(LIB_DIRS) $(LIBS)
+

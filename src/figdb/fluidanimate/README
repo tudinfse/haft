@@ -1,0 +1,4 @@
+Works only with 1 thread!
+
+Multi-threaded versions produce non-deterministic results due to arbitrary
+thread interleaving.
