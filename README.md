@@ -11,7 +11,7 @@ This repository provides two benchmark suites, PARSEC and Phoenix (pthreads vers
 * [Phoenix-pthreads 2.0](https://bitbucket.org/dimakuv/phoenix-pthreads)
 
 The other benchmarks (LogCabin, Memcached, SQLite3, LevelDB, and Apache) are *not* found in this repository. Please ask us directly if you need them via email:
-`dmitrii.kuvaiskii \[at\] tu-dresden \[dot\] de`.
+`dmitrii.kuvaiskii [at] tu-dresden [dot] de`.
 
 ## Docker
 
