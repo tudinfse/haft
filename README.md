@@ -2,7 +2,7 @@
 
 HAFT is a compiler framework that transforms unmodified multithreaded applications to support fault detection via instruction-level replication (ILR) and fault recovery via hardware transactional memory (HTM, in our case Intel TSX). See [HAFT paper](link) for details.
 
-## Bechmarks
+## Benchmarks
 
 This repository provides two benchmark suites, PARSEC and Phoenix (pthreads version):
 
@@ -10,7 +10,8 @@ This repository provides two benchmark suites, PARSEC and Phoenix (pthreads vers
 
 * [Phoenix-pthreads 2.0](https://bitbucket.org/dimakuv/phoenix-pthreads)
 
-The other benchmarks (LogCabin, Memcached, SQLite3, LevelDB, and Apache) are *not* found in this repository. Please ask us directly if you need them via email.
+The other benchmarks (LogCabin, Memcached, SQLite3, LevelDB, and Apache) are *not* found in this repository. Please ask us directly if you need them via email:
+`dmitrii.kuvaiskii \[at\] tu-dresden \[dot\] de`.
 
 ## Docker
 
@@ -48,8 +49,8 @@ EXPORT NUM_RUNS=10   # by default, each benchmark is run once
 * The results of benchmark runs are aggregated in two logs, saved in your current directory under data/:
 
 ```sh
-vim data/parsec.log       # complete log of PARSEC benchmarks' runs
-vim data/parsec_raw.txt   # aggregated results of PARSEC benchmarks' runs
-vim data/phoenix.log      # complete log of Phoenix benchmarks' runs
-vim data/phoenix_raw.txt  # aggregated results of Phoenix benchmarks' runs
+less data/parsec.log       # complete log of PARSEC benchmarks' runs
+less data/parsec_raw.txt   # aggregated results of PARSEC benchmarks' runs
+less data/phoenix.log      # complete log of Phoenix benchmarks' runs
+less data/phoenix_raw.txt  # aggregated results of Phoenix benchmarks' runs
 ```
