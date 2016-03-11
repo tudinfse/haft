@@ -87,7 +87,8 @@ VOLUME /data
 WORKDIR /root/code/haft/
 
 # == Environment variables ==
-ENV NUM_RUNS=1  # number of runs in each performance experiment
+# number of runs in each performance experiment
+ENV NUM_RUNS=1
 
 # == Interface ==
 ENTRYPOINT ["/bin/bash"]
