@@ -1,0 +1,15 @@
+# ===== LLVM PATHS =====
+LLVM_PATH = $(HOME)/bin/llvm/build/bin/
+
+# ===== PASSES PATHS =====
+TX_PATH  = $(HOME)/code/haft/src/tx/
+ILR_PATH = $(HOME)/code/haft/src/ilr/
+
+# ===== ADDITIONAL FLAGS =====
+# version of HTM to use -- tx_debug.c  tx_ibm.c  tx_intel.c
+TX_VERSION = tx_intel.c
+
+# flags for Hardware Transactional Memory used
+HTM_FLAGS = -mrtm     # uncomment for Intel TSX
+
+
