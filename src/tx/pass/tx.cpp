@@ -11,7 +11,7 @@
 //         - conditional for calls to local funcs
 //
 //     - at loop headers based on the dynamic counter
-//	 
+//
 //===----------------------------------------------------------------------===//
 
 #define DEBUG_TYPE "Transactify"
@@ -71,7 +71,7 @@ static cl::opt<bool>
 	FuncExplicitTrans("func-explicit-trans", cl::Optional, cl::init(false),
 	cl::desc("All functions are wrapped in explicit transactions (very conservative)"));
 
-static cl::list<std::string> 
+static cl::list<std::string>
 	CalledFromOutside("called-from-outside", cl::ZeroOrMore,
 	cl::desc("Function (typically event handler) that is called from outside"));
 
@@ -98,15 +98,15 @@ bool isSwiftFunc(std::string FuncName) {
 	std::string prefix = "SWIFT$";
 	if (!FuncName.compare(0, prefix.size(), prefix))
 		return true;
-	return false;	
+	return false;
 }
 
 bool isInternalFunc(Function* F) {
 	if (F) {
 		if (F->isIntrinsic() ||
 			F == tx_cond_start_func ||
-			F == tx_start_func || 
-			F == tx_end_func || 
+			F == tx_start_func ||
+			F == tx_end_func ||
 			F == tx_abort_func ||
 			F == tx_threshold_exceeded_func ||
 			F == tx_increment_func ||
@@ -199,7 +199,7 @@ public:
 
 	void assignLongestPath(BasicBlock* BB, size_t N) {
 		LongestPaths.erase(BB);
-		LongestPaths.insert(std::pair<BasicBlock*, size_t>(BB, N));		
+		LongestPaths.insert(std::pair<BasicBlock*, size_t>(BB, N));
 	}
 
 	void insertCounterIncrement(Instruction* I, size_t Inc) {
@@ -207,7 +207,7 @@ public:
 			return;
 
 		IRBuilder<> irBuilder(I);
-		irBuilder.CreateCall(tx_increment_func, 
+		irBuilder.CreateCall(tx_increment_func,
 			ConstantInt::get(getGlobalContext(), APInt(64, Inc)));
 	}
 
@@ -257,7 +257,7 @@ public:
 				if (LongestPath < PredPath)  LongestPath = PredPath;
 		}
 		assignLongestPath(BB, LongestPath);
-	}	
+	}
 
 	void visitInst(Instruction* I, size_t instIdx) {
 		// ----- logic to count instructions -----
@@ -312,7 +312,7 @@ public:
 						// NOTE: do not insert into unwind BB because it
 						//       hopefully never executes anyway
 					} else {
-						insertTxStart(std::next(instIt));
+						insertTxStart(&*std::next(instIt));
 					}
 				} else {
 					// callee is local and thus inside Tx
@@ -324,7 +324,7 @@ public:
 						// NOTE: do not insert into unwind BB because it
 						//       hopefully never executes anyway
 					} else {
-						insertCondTxStart(std::next(instIt));
+						insertCondTxStart(&*std::next(instIt));
 					}
 				}
 
@@ -332,7 +332,7 @@ public:
 				return;
 			}
 
-			case Instruction::Resume: 
+			case Instruction::Resume:
 			case Instruction::Ret: {
 				if (isCalledFromOutside(I->getParent()->getParent()->getName())) {
 					// caller cannot be inside Tx, so end Tx right before return
@@ -345,14 +345,14 @@ public:
 				}
 				// for sanity
 				assignLongestPath(I->getParent(), 0);
-				return;			
+				return;
 			}
 
 			default: {
 				return;
 			}
 		}
-	}	
+	}
 
 	void visitBasicBlock(BasicBlock* BB) {
 		size_t instIdx = 0;
@@ -361,7 +361,7 @@ public:
 			// so we first memorize the next original instruction and after
 			// modifications we jump to it, skipping trans-added ones
 			BasicBlock::iterator nextbi = std::next(bi);
-			visitInst(bi, instIdx);
+			visitInst(&*bi, instIdx);
 			bi = nextbi;
 			instIdx++;
 		}
@@ -397,7 +397,7 @@ public:
 					txcondstartcall = call;
 					continue;
 				}
-				if (F == tx_increment_func) {					
+				if (F == tx_increment_func) {
 					txincrementcall = call;
 					continue;
 				}
@@ -427,7 +427,7 @@ public:
 			TerminatorInst* terminator = preheader->getTerminator();
 			insertCounterIncrement(terminator, BBPath * AVERAGE_TRIP_COUNT);
 		}
-#endif		
+#endif
 	}
 
 	void insertChecksOnLoopHeaders(Loop* L) {
@@ -439,7 +439,8 @@ public:
 		// if we find it, must substitute "0" by "tx_threshold_exceeded"
 		BasicBlock* header = L->getHeader();
 
-		for (BasicBlock::iterator I = header->getFirstNonPHI(); I != header->end(); I++) {
+		BasicBlock::iterator firstNonPhi(header->getFirstNonPHI());
+		for (BasicBlock::iterator I = firstNonPhi; I != header->end(); I++) {
 			if (BranchInst* br = dyn_cast<BranchInst>(I)) {
 				if (!br->isConditional()) continue;
 				Value* cond = br->getCondition();
@@ -465,7 +466,7 @@ public:
 				return;
 			}
 		}
-#endif		
+#endif
 	}
 
 	void visitLoop(Loop* L) {
@@ -553,7 +554,7 @@ public:
 			if (isa<UnreachableInst>(II)) {
 				// Unreachable signifies program termination, benign case (for Swift)
 				return 1;
-			}			
+			}
 			if (isa<InvokeInst>(II)) {
 				// found some bad instruction -- critical section is too complex
 				return 2;
@@ -606,12 +607,12 @@ public:
 	}
 
 	void optimizeCriticalSections(Function &F) {
-#ifdef TRANS_OPTIMIZE_CRITICALSECTIONS		
+#ifdef TRANS_OPTIMIZE_CRITICALSECTIONS
 		// first analyze critical sections and memorize only "tiny" ones
 		for (Function::iterator BB = F.begin(), BE = F.end(); BB != BE; ++BB)
 			for (auto II = BB->begin(), IE = BB->end(); II != IE; ++II) {
-				if (isCallToFunc(II, "pthread_mutex_lock"))
-					analyzeCriticalSection(II);
+				if (isCallToFunc(&*II, "pthread_mutex_lock"))
+					analyzeCriticalSection(&*II);
 			}
 
 		// now substitute "tiny" critical sections with HTM implementation,
@@ -702,8 +703,8 @@ public:
 
 				bi = nextbi;
 			}
-#endif		
-	}	
+#endif
+	}
 
 	void visitFunction(Function& F) {
 		if (isCalledFromOutside(F.getName())) {
@@ -731,11 +732,11 @@ public:
 			initLongestPath(BB);
 			visitBasicBlock(BB);
 			Visited.insert(BB);
-			
+
 			// TODO: we can check BB succs and if one of the is loop header,
 			// increment dynamic counter; but do we need such precision?
 //			size_t LongestPath = LongestPaths.find(BB)->second;
-		}		
+		}
 
 		optimizeCriticalSections(F);
 		optimizeBasicBlocks(F);

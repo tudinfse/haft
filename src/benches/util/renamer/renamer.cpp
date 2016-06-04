@@ -2,7 +2,7 @@
 //
 //	 This pass renames certain libc/libm functions so that the reimplemented
 //   functions (that can be ILRed and TXed) are called.
-//	 
+//
 //===----------------------------------------------------------------------===//
 
 #define DEBUG_TYPE "Renamer"
@@ -166,10 +166,10 @@ class RenamerPass : public FunctionPass {
 		F.getParent();
 
 		for (Function::iterator fi = F.begin(), fe = F.end(); fi != fe; ++fi) {
-			BasicBlock* BB = fi;
+			BasicBlock* BB = &*fi;
 
 			for (BasicBlock::iterator bi = BB->begin(); bi != BB->end(); ) {
-				Instruction* I = bi;
+				Instruction* I = &*bi;
 				bi = std::next(bi);
 
 				if (CallInst* call = dyn_cast<CallInst>(I)) {
@@ -185,14 +185,14 @@ class RenamerPass : public FunctionPass {
 					assert(renamedfunc && "could not find substitute for function");
 
 //					errs() << "renaming: " << *func << "\n";
-//					errs() << "      to: " << *renamedfunc << "\n";					
+//					errs() << "      to: " << *renamedfunc << "\n";
 
 					IRBuilder<> irBuilder(I);
 
 					std::vector<Value*> argsVec;
 					for (unsigned i = 0; i < renamedfunc->arg_size(); i++) {
 						Value* arg = call->getArgOperand(i);
-						// corner-case: llvm.memset and libc memset differ in 
+						// corner-case: llvm.memset and libc memset differ in
 						// type of second arg -- i8 and i32 respectively;
 						// we fix it here
 						if (i == 1 && func->getName().startswith("llvm.memset.")) {

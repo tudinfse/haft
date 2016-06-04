@@ -6,7 +6,7 @@
 //   TODO: previously was called "SWIFT" since the idea is taken from:
 //           http://liberty.cs.princeton.edu/Publications/cgo3_swift.pdf
 //         change to ILR eveywhere at some point...
-//	 
+//
 //===----------------------------------------------------------------------===//
 
 #define DEBUG_TYPE "ILR"
@@ -127,7 +127,7 @@ class SwiftHelpers {
 
 		if (
 			// floating point arithmetic
-			fname.startswith("llvm.sqrt.") || 
+			fname.startswith("llvm.sqrt.") ||
 			fname.startswith("llvm.powi.") ||
 			fname.startswith("llvm.sin.") ||
 			fname.startswith("llvm.cos.") ||
@@ -270,7 +270,7 @@ class ValueShadowMap{
 	Value* getShadow(Value *v, Value *inst_debug) {
 		// no checks for constants, BBs (labels), function declarations, inline asm and metadata
 		if (isa<Constant>(v) || isa<BasicBlock>(v) || isa<Function>(v) ||
-			isa<InlineAsm>(v) || isa<MetadataAsValue>(v) || 
+			isa<InlineAsm>(v) || isa<MetadataAsValue>(v) ||
 			isa<InvokeInst>(v) || isa<LandingPadInst>(v))
 			return nullptr;
 
@@ -329,13 +329,13 @@ class SwiftTransformer {
 
 			case Type::HalfTyID: {
 					// TODO: this can change the precision, ignore?
-					v = irBuilder.CreateFPExt(v, Type::getFloatTy(getGlobalContext()), "swift.halfcast");				
+					v = irBuilder.CreateFPExt(v, Type::getFloatTy(getGlobalContext()), "swift.halfcast");
 				}
 				break;
 
 			case Type::X86_FP80TyID: {
 					// TODO: this can change the precision, ignore?
-					v = irBuilder.CreateFPTrunc(v, Type::getDoubleTy(getGlobalContext()), "swift.fp80cast");				
+					v = irBuilder.CreateFPTrunc(v, Type::getDoubleTy(getGlobalContext()), "swift.fp80cast");
 				}
 				break;
 
@@ -367,7 +367,7 @@ class SwiftTransformer {
 					v = irBuilder.CreateBitCast(v, TyVecInt64, "swift.intveccast");
 				} else
 				if (VecTy->isFloatTy()   && Ty != TyVecFloat) {
-					// TODO: <2 x float> FP-extended to <2 x double>, can change 
+					// TODO: <2 x float> FP-extended to <2 x double>, can change
 					//        results of computation
 					v = irBuilder.CreateFPExt(v, TyVecDouble, "swift.floatveccast");
 				} else
@@ -379,7 +379,7 @@ class SwiftTransformer {
 				}
 				break;
 
-			default:                
+			default:
 			    errs() << "don't know how to handle type " << *Ty << "\n";
 				assert(!"cannot create check for this type");
 				break;
@@ -395,7 +395,7 @@ class SwiftTransformer {
 
 		if (StructType *st = dyn_cast<StructType>(v1->getType())) {
 			// complex struct type, need to compare each struct's field
-			for (unsigned i = 0; i < st->getNumElements(); ++i) {				
+			for (unsigned i = 0; i < st->getNumElements(); ++i) {
 				Value *f1 = irBuilder.CreateExtractValue(v1, ArrayRef<unsigned>(i));
 				Value *f2 = irBuilder.CreateExtractValue(v2, ArrayRef<unsigned>(i));
 				createCheckerCall(irBuilder, f1, f2, movev2);
@@ -411,7 +411,7 @@ class SwiftTransformer {
 				//    (2) we assume that a very short time passed before move and check
 				return;
 			}
-#endif		
+#endif
 
 		v1 = castToSupportedType(irBuilder, v1);
 		v2 = castToSupportedType(irBuilder, v2);
@@ -428,13 +428,20 @@ class SwiftTransformer {
 			Type2FunctionMap::iterator it2 = swiftHelpers->movers.find(v2->getType());
 			if (it2 == swiftHelpers->movers.end())
 				errs() << "don't know how to handle type " << *(v2->getType()) << "\n";
-			assert (it2 != swiftHelpers->movers.end() && "no mover function found for specified type");			
+			assert (it2 != swiftHelpers->movers.end() && "no mover function found for specified type");
 
 			v2 = irBuilder.CreateCall(it2->second, v2, "swift.movetocheck");
 		}
 
 		Value* id = ConstantInt::get(Type::getInt32Ty(getGlobalContext()), next_id++);
-		irBuilder.CreateCall3(it->second, v1, v2, id);
+
+		std::vector<Value*> argsVec;
+		argsVec.push_back(v1);
+		argsVec.push_back(v2);
+		argsVec.push_back(id);
+		ArrayRef<Value*> argsRef(argsVec);
+
+		irBuilder.CreateCall(it->second, argsRef);
 	}
 
 	Instruction* createMoveCall(IRBuilder<>& irBuilder, Value* v) {
@@ -442,7 +449,7 @@ class SwiftTransformer {
 			// complex struct type, need to move each struct's field
 			Value *newstruct = UndefValue::get(st);
 
-			for (unsigned i = 0; i < st->getNumElements(); ++i) {				
+			for (unsigned i = 0; i < st->getNumElements(); ++i) {
 				Value *f = irBuilder.CreateExtractValue(v, ArrayRef<unsigned>(i));
 				Value *shadow = createMoveCall(irBuilder, f);
 				newstruct = irBuilder.CreateInsertValue(newstruct, shadow, ArrayRef<unsigned>(i));
@@ -509,7 +516,7 @@ class SwiftTransformer {
 			// we could have a <2 x iX*> (pair of pointers) casted to <2 x i64>, need to cast back
 			if (v->getType()->isVectorTy() && origType->getVectorElementType()->isPointerTy()) {
 					move = cast<Instruction>(irBuilder.CreateIntToPtr(move, origType, v->getName() + CLONE_SUFFIX));
-			}				
+			}
 		}
 		return move;
 	}
@@ -538,11 +545,11 @@ class SwiftTransformer {
 		if (I->use_empty())
 			return;
 
-#if 0		
+#if 0
 		if (I->isTerminator())
-			errs() << I->getParent()->getParent()->getName() << "::  cannot shadow terminator instruction " << *I << "\n";			
+			errs() << I->getParent()->getParent()->getName() << "::  cannot shadow terminator instruction " << *I << "\n";
 		assert (!I->isTerminator() && "cannot shadow terminator instruction");
-#endif		
+#endif
 
 		// add shadow instruction(s) after I
 		BasicBlock::iterator instIt(I);
@@ -613,14 +620,14 @@ class SwiftTransformer {
 					// (see also checkInst)
 					Instruction *shadow = createMoveCall(irBuilder, I);
 					shadows.add(I, shadow);
-					break;					
+					break;
 				}
 #else
 				// conservatively treat all loads as atomics
 				Instruction *shadow = createMoveCall(irBuilder, I);
 				shadows.add(I, shadow);
-				break;				
-#endif				
+				break;
+#endif
 			}
 
 			// shadow instruction, substituting all operands with shadow operands
@@ -639,7 +646,7 @@ class SwiftTransformer {
 
 		case Instruction::PHI: {
 			// shadow PHI instruction, but delay shadowing its operands after
-			// all function modifications (because PHI uses Value before it's 
+			// all function modifications (because PHI uses Value before it's
 			// declared and thus shadowed)
 			PHINode* shadow = cast<PHINode>( I->clone() );
 			shadows.add(I, shadow);
@@ -698,11 +705,11 @@ class SwiftTransformer {
 			case Instruction::Call:
 			case Instruction::Ret:
 			case Instruction::Switch:
-			case Instruction::Invoke: {				
+			case Instruction::Invoke: {
 				if (CallInst* call = dyn_cast<CallInst>(I)) {
 					// do not do anything with duplicated (llvm-intrinsic) functions
 					if (swiftHelpers->isDuplicatedFunc(call->getCalledFunction()))
-					 	break;				
+					 	break;
 					// do not check calls to "ignored" functions
 					if (swiftHelpers->isIgnoredFunc(call->getCalledFunction()))
 					 	break;
@@ -737,7 +744,7 @@ class SwiftTransformer {
 				// conservatively check operands on each load
 				IRBuilder<> irBuilder(instIt->getParent(), instIt);
 				checkInstOperands(I, irBuilder);
-#endif				
+#endif
 				}
 				break;
 
@@ -796,7 +803,7 @@ class SwiftTransformer {
 				IRBuilder<> irBuilder(instIt->getParent(), instIt);
 				checkInstOperands(I, irBuilder);
 #endif
-				}				
+				}
 				break;
 
 			default:
@@ -811,8 +818,8 @@ class SwiftTransformer {
 
 		// make a shadow for each function arg (using swift-move)
 		for (auto arg = F.arg_begin(); arg != F.arg_end(); ++arg){
-			Value *shadow = createMoveCall(irBuilder, arg);
-			shadows.add(arg, shadow);
+			Value *shadow = createMoveCall(irBuilder, &*arg);
+			shadows.add(&*arg, shadow);
 		}
 	}
 
@@ -856,7 +863,7 @@ class SwiftTransformer {
 						// need to create GlobalVariable
 						static int cnt = 0;
 						gv = new GlobalVariable(*swiftHelpers->module,
-								c->getType(), 
+								c->getType(),
 								true, // constant
 								GlobalValue::InternalLinkage,
 								c,	  // ConstantInt
@@ -896,12 +903,12 @@ class SwiftTransformer {
 				continue;
 			}
 
-			if (isa<StoreInst>(I) || isa<BranchInst>(I) || 
-				isa<AtomicCmpXchgInst>(I) || isa<AtomicRMWInst>(I) || 
+			if (isa<StoreInst>(I) || isa<BranchInst>(I) ||
+				isa<AtomicCmpXchgInst>(I) || isa<AtomicRMWInst>(I) ||
 				isa<ReturnInst>(I) || isa<SwitchInst>(I) || isa<InvokeInst>(I))
-				return true; 
+				return true;
 
-			if (LoadInst* load = dyn_cast<LoadInst>(I)) 
+			if (LoadInst* load = dyn_cast<LoadInst>(I))
 				if (load->isAtomic())
 					return true;
 
@@ -961,7 +968,7 @@ class SwiftTransformer {
 				PHINode* phi = *phiIt;
 				Value *shadowphi = shadows.getShadow(phi, phi);
 				createCheckerCall(irBuilder, phi, shadowphi, false);
-			}	
+			}
 		}
 	}
 
@@ -970,7 +977,7 @@ class SwiftTransformer {
 		for (auto li = LI.begin(), le = LI.end(); li != le; ++li) {
 			insertChecksOnLoopHeader(*li, DT);
 		}
-#endif		
+#endif
 	}
 
 	void addShadowBasicBlocks(BranchInst* BI) {
@@ -1017,10 +1024,10 @@ class SwiftTransformer {
 					}
 				}
 			}
-			
+
 			// Note that the original shadow-comparison becomes redundant
 			// and will be optimized away, so we don't remove it explicitly
-		}	
+		}
 	}
 
 	void addControlFlowChecks() {
@@ -1082,12 +1089,12 @@ class SwiftPass : public FunctionPass {
 				BasicBlock::iterator nextIt = std::next(instIt);
 
 				if (!shadowedArgs) {
-					swifter.shadowArgs(F, instIt);
+					swifter.shadowArgs(F, &*instIt);
 					shadowedArgs = true;
 				}
 
-				swifter.checkInst (instIt);
-				swifter.shadowInst (instIt);
+				swifter.checkInst (&*instIt);
+				swifter.shadowInst (&*instIt);
 
 				instIt = nextIt;
 			}
@@ -1095,13 +1102,13 @@ class SwiftPass : public FunctionPass {
 
 		// walk through BBs not covered by dominator tree (case for landing pads)
 		for (Function::iterator BB = F.begin(), BE = F.end(); BB != BE; ++BB) {
-			if (visited.count(BB) > 0)
+			if (visited.count(&*BB) > 0)
 				continue;
 
 			for (BasicBlock::iterator instIt = BB->begin (); instIt != BB->end (); ) {
 				BasicBlock::iterator nextIt = std::next(instIt);
-				swifter.checkInst (instIt);
-				swifter.shadowInst (instIt);
+				swifter.checkInst (&*instIt);
+				swifter.shadowInst (&*instIt);
 				instIt = nextIt;
 			}
 		}

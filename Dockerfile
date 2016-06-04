@@ -1,4 +1,4 @@
-# Dockerfile for HAFT
+# Dockerfile for HAFT and LLVM 3.8.0 (June 2016)
 
 FROM ubuntu
 
@@ -43,14 +43,12 @@ RUN git clone https://github.com/llvm-mirror/llvm $LLVM_SOURCE && \
     git clone https://github.com/llvm-mirror/clang $CLANG_SOURCE
 
 WORKDIR $LLVM_SOURCE
-COPY install/patches/llvm370-01-x86-ilr-nocmp.patch ./
-COPY install/patches/llvm370-02-x86-xabort.patch ./
-RUN git checkout 509fb2c84c5b1cbff85c5963d5a112dd157e91ad && \
-    git apply llvm370-01-x86-ilr-nocmp.patch && \
-    git apply llvm370-02-x86-xabort.patch
+COPY install/patches/llvm380.patch ./
+RUN git checkout release_38 && \
+    git apply llvm380.patch
 
 WORKDIR $CLANG_SOURCE
-RUN git checkout e7b486824bfac07b13bb554edab7d62452dab4d8
+RUN git checkout release_38
 
 # build
 WORKDIR $LLVM_BUILD
