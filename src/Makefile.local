@@ -1,5 +1,5 @@
 # ===== LLVM PATHS =====
-LLVM_PATH = $(HOME)/bin/haft-llvm-3.8.0/build/bin/
+LLVM_PATH = $(HOME)/bin/llvm/build/bin/
 
 # ===== PASSES PATHS =====
 TX_PATH  = $(HOME)/code/haft/src/tx/
